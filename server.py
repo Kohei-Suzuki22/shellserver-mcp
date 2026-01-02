@@ -2,6 +2,7 @@ from mcp.server.fastmcp import FastMCP
 import subprocess
 import asyncio
 from typing import Optional, Dict, Any, List
+from pathlib import Path
 
 
 # =============================================================================
@@ -139,4 +140,72 @@ async def run_command(command: str) -> Dict[str, Any]:
       "stderr": f"Error executing command: {str(e)}",
       "return_code": -1
     }
+
+
+# =============================================================================
+# リソースの定義
+# =============================================================================
+# @mcp.resource() デコレータ:
+#   - データをMCPリソースとして公開する
+#   - ツール（Tool）とは異なる概念
+#
+# -------------------------------------------------------------------------
+# Tool と Resource の違い
+# -------------------------------------------------------------------------
+#   | 項目       | Tool                    | Resource                    |
+#   |------------|-------------------------|-----------------------------|
+#   | 用途       | アクション実行          | データ提供                  |
+#   | 例         | コマンド実行、API呼出   | ファイル内容、設定値        |
+#   | 副作用     | あり得る                | 基本的になし（読み取り専用）|
+#   | REST類似   | POST                    | GET                         |
+#
+# -------------------------------------------------------------------------
+# Claude Code での確認方法
+# -------------------------------------------------------------------------
+#
+#   | 確認方法                           | Tool | Resource |
+#   |------------------------------------|------|----------|
+#   | /mcp コマンド                      | ○    | ✕        |
+#   | @ メンション（オートコンプリート） | -    | ✕(個別)  |
+#   | Claude に「一覧見せて」と頼む      | ○    | ○        |
+#
+# Claude は内部的に ListMcpResourcesTool を持っているため、
+# 「このサーバーの Resource 一覧を見せて」と頼めば確認可能。
+#
+# -------------------------------------------------------------------------
+@mcp.resource("file://mcpreadme")
+async def mcpreadme() -> str:
+  """
+  Expose mcpreadme.md from the user's Desktop directory
+
+  Returns:
+    The contents of mcpreadme.md as a string
+  """
+  # -------------------------------------------------------------------------
+  # pathlib.Path によるパス操作
+  # -------------------------------------------------------------------------
+  # Path.home(): ユーザーのホームディレクトリを取得
+  #   - macOS:   /Users/kohei
+  #   - Windows: C:\Users\kohei
+  #   - Linux:   /home/kohei
+  #
+  # / 演算子: パスを結合（os.path.join の代わり）
+  #   - OS間の差異（/ vs \）を自動で吸収
+  #   - 文字列結合より安全で可読性が高い
+  #
+  # 従来の書き方:
+  #   import os
+  #   os.path.join(os.path.expanduser("~"), "Desktop", "mcpreadme.md")
+  # -------------------------------------------------------------------------
+  desktop_path = Path.home() / "Desktop"    # → /Users/kohei/Desktop
+  readme_path = desktop_path / "mcpreadme.md"  # → /Users/kohei/Desktop/mcpreadme.md
+
+  try:
+    with open(readme_path, "r") as file:
+      content = file.read()
+      return content
+  except Exception as e:
+    return f"Error reading mcpreadme.md: {str(e)}"
+
+
 
